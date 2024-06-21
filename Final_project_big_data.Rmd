@@ -1,0 +1,177 @@
+---
+title: "Final Project"
+author: "Chanakya Burugugadda"
+date: "2024-06-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+install.packages("tidyverse")
+install.packages("caret")
+install.packages("corrplot")
+install.packages("ggplot2")
+
+# Load libraries
+library(tidyverse)
+library(caret)
+library(corrplot)
+library(ggplot2)
+```
+
+```{r}
+# Load data
+df <- read.csv("C:/Users/Chanakya/Downloads/creditcard.csv")
+
+# Display summary statistics
+summary(df)
+
+# Display column names
+colnames(df)
+
+# Check for missing values
+colSums(is.na(df))
+
+# Count of honest vs fraudulent transactions
+table(df$Class)
+
+# Proportion of fraudulent transactions
+prop_fraud <- round(table(df$Class)[2] / table(df$Class)[1], 4)
+print(paste("Proportion of fraudulent transactions:", prop_fraud))
+
+# Display first few rows of the dataset
+head(df)
+
+
+# Boxplot without outliers
+ggplot(df, aes(x = factor(Class), y = Amount, fill = factor(Class))) +
+  geom_boxplot(outlier.shape = NA) +
+  ggtitle("Boxplot without Outliers") +
+  theme_minimal() +
+  labs(x = "Class", y = "Amount") +
+  coord_cartesian(ylim = c(0, 300)) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "none",
+    plot.margin = margin(1, 1, 1, 1, "cm")
+  ) +
+  scale_fill_manual(values = c("0" = "blue", "1" = "orange"))
+
+
+ggplot(df, aes(x = factor(Class), y = Amount)) +
+  geom_boxplot() +
+  ggtitle("Boxplot with Outliers and Limited Y-Axis") +
+  theme_minimal() +
+  labs(x = "Class", y = "Amount") +
+  coord_cartesian(ylim = c(0, 500))
+```
+
+```{r}
+# Calculate the correlation matrix
+corr <- cor(df)
+
+# Visualize the correlation matrix as a heatmap
+corrplot(corr, 
+         method = "color",  # Color method
+         type = "upper",    # Show upper triangle of the matrix
+         tl.col = "black",  # Color of the text labels
+         tl.cex = 0.8,      # Size of the text labels
+         col = colorRampPalette(c("white", "red"))(200)  # Color palette
+)
+```
+
+```{r}
+# Filter rows where Class equals 1
+df_filtered <- df %>% filter(Class == 1)
+df_filtered
+
+
+
+# Compute the Hour column
+df <- df %>%
+  mutate(Hour = floor(Time / 3600))
+
+# Filter the data
+df_1 <- df %>% filter(Class == 1)
+df_0 <- df %>% filter(Class == 0)
+
+# Create line plots
+p1 <- ggplot(df_1, aes(x = Hour, y = Amount)) +
+  geom_line(color = "red") +
+  ggtitle("Mean Transaction Amount by Hour (Fraudulent)") +
+  theme_minimal()
+
+p2 <- ggplot(df_0, aes(x = Hour, y = Amount)) +
+  geom_line() +
+  ggtitle("Mean Transaction Amount by Hour (Non-Fraudulent)") +
+  theme_minimal()
+
+# Arrange the plots side by side
+library(gridExtra)
+grid.arrange(p1, p2, ncol = 2)
+```
+
+```{r}
+# Standardize the Time and Amount columns
+df <- df %>%
+  mutate(
+    Time = scale(Time),
+    Amount = scale(Amount)
+  )
+
+# Display the first few rows of the standardized data
+head(df)
+
+
+# Convert Class to factor
+df$Class <- as.factor(df$Class)
+
+# Define the target and predictors
+target <- "Class"
+predictors <- setdiff(names(df), target)
+
+# Extract predictors and target
+x <- df %>% select(all_of(predictors))
+y <- df[[target]]
+```
+
+```{r}
+# Split the data into training and testing sets
+set.seed(2024)
+trainIndex <- createDataPartition(y, p = 0.8, list = FALSE)
+train_data <- df[trainIndex, ]
+test_data <- df[-trainIndex, ]
+
+# Display the dimensions of the training and testing sets
+cat("Training set dimensions: ", dim(train_data), "\n")
+cat("Testing set dimensions: ", dim(test_data), "\n")
+
+# Define the train control with K-Fold Cross-Validation and proper seed structure
+train_control <- trainControl(
+  method = "cv",          # Cross-validation
+  number = 5,             # Number of folds
+seeds = list(
+    1:5,
+    1:5,
+    1:5,
+    1:5,
+    1:5,
+    1  # Final model seed
+  )
+)
+
+# Fit the model using caret with GLM
+set.seed(123)
+glm_model <- train(
+  Class ~ ., data = train_data,
+  method = "glm",
+  family = binomial(),
+  trControl = train_control
+)
+
+summary(glm_model)
+```
